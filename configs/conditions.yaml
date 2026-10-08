@@ -31,7 +31,7 @@ classes:
   heavy:
     bg_cpu_pct_max: 100
     bg_gpu_util_pct_max: 100
-    swap_in_mb_s_max: 1.0e9
+    swap_in_mb_s_max: 1000000000.0
 
 targets:
   quiet:

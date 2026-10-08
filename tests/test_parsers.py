@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.join(ROOT, "harness"))
 
 from summarize import _is_throttled  # noqa: E402
 from fingerprint import accelerator, machine_class, suggest_tier, udev_memory  # noqa: E402
-from hostload import parse_typeperf_line  # noqa: E402
+from hostload import classify, load_conditions, parse_typeperf_line, plan  # noqa: E402
 from telemetry import parse_powermetrics  # noqa: E402
 
 
@@ -38,6 +38,23 @@ class TypeperfTest(unittest.TestCase):
         self.assertIsNone(parse_typeperf_line(""))
         self.assertEqual(parse_typeperf_line('"09/25/2026 19:30:01.123","12.5","8123.000000"'), (12.5, 8123.0))
         self.assertIsNone(parse_typeperf_line('"09/25/2026 19:30:02.123"," ","8123"'))
+
+
+class HostConditionTest(unittest.TestCase):
+    def test_configured_class_boundaries(self):
+        classes = load_conditions()["classes"]
+        for cpu, gpu, swap, expected in ((5, 5, 0.1, "quiet"), (15, 20, 1, "light"),
+                                         (40, 40, 5, "office"), (50, None, 0.0, "heavy"),
+                                         (0, None, 6.0, "heavy"), (100, 100, 1e9, "heavy")):
+            with self.subTest(cpu=cpu, gpu=gpu, swap=swap):
+                self.assertEqual(classify(cpu, gpu, swap, classes), expected)
+
+    def test_quiet_gate_blocks_heavy_load(self):
+        measurement = {"bg_cpu_pct": 50.0, "bg_gpu_util_pct": None, "swap_in_mb_s": 0.0,
+                       "foreign_gpu_procs": []}
+        result = plan("quiet", measurement, load_conditions(), allow_topup=False)
+        self.assertEqual(result["measured_class"], "heavy")
+        self.assertEqual(result["action"], "blocked")
 
 
 def _fp(cpu="x", arch="x86_64", ram=16.0, gpus=(), os_name="Linux-6.8-x86_64"):
